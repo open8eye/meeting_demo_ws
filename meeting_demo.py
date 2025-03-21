@@ -47,13 +47,12 @@ class Config(BaseSettings):
         bit_depth (int): 位深度。
         channels (int): 音频通道数。
         avg_logprob_thr (float): 平均log概率阈值。
-
-        若需严格区分说话人（如敏感会议、多人发言需精准标记）： 选择高阈值（如 0.4），优先避免误判不同人。
-若需容忍一定误差以提高匹配率（如非敏感会议、优先保证发言连续性）： 选择低阈值（如 0.25），减少同一人被拆分为多个说话人的情况。
     """
+    # 可以自定义得分阈值来进行识别，阈值越高，判定为同一人的条件越严格
     # sv_thr: float = Field(0.4, description="说话人验证阈值")
-    # sv_thr: float = Field(0.3, description="说话人验证阈值")
-    sv_thr: float = Field(0.249, description="说话人验证阈值")
+    sv_thr: float = Field(0.31, description="说话人验证阈值")
+    # sv_thr: float = Field(0.249, description="说话人验证阈值")
+    # sv_thr: float = Field(0.2, description="说话人验证阈值")
     # sv_thr: float = Field(0.262, description="说话人验证阈值")
     chunk_size_ms: int = Field(300, description="分块大小（以毫秒为单位）")
     sample_rate: int = Field(16000, description="采样率（Hz）")
@@ -182,8 +181,12 @@ session_list = {}
 """
 准备模型 - start - ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
 """
-# sv_name = 'speech_eres2net_large_sv_zh-cn_3dspeaker_16k' # 2024年模型
-sv_name = 'speech_res2net_sv_zh-cn_3dspeaker_16k'  # 2025年模型
+# sv_name = 'speech_eres2net_sv_zh-cn_16k-common'  # ERes2Net说话人确认-中文-通用-200k-Spkrs
+# sv_name = 'speech_eres2net_large_sv_zh-cn_3dspeaker_16k' # 3d speaker 2024年模型
+# sv_name = 'speech_res2net_sv_zh-cn_3dspeaker_16k'  # Res2Net说话人确认-中文-3D-Speaker-16k
+sv_name = 'speech_campplus_sv_zh-cn_16k-common'  # CAM++说话人确认-中文-通用-200k-Spkrs
+# 输入一段多人对话的音频，本模型可以自动的识别音频中的对话人数，并且对其进行区分，适合用于客服对话、会议讨论、采访等场景，该系统配合语音识别可进一步搭建多人对话的语音识别系统。
+# sv_name = 'speech_campplus_speaker-diarization_common'  # CAM++说话人日志-对话场景角色区分-通用
 # 说话校验
 sv_pipeline = pipeline(
     task='speaker-verification',
@@ -203,12 +206,14 @@ sv_pipeline = pipeline(
 # asr 可嵌入热词 可识别说话人模型
 model_asr = AutoModel(
     model=model_asr,
-    vad_model=vad_model,
     model_revision="v2.0.4",
-    # vad_kwargs=vad_kwargs, # 因为是websocket流式调用 是一段段音频波形数据传入的 模型里的cam++ 就无法使用 所以屏蔽
+    # 因为是websocket流式调用 是一段段音频波形数据传入的 模型里的cam++ 就无法使用 所以屏蔽
+    # vad_model=vad_model,
+    # vad_kwargs=vad_kwargs,
     # trust_remote_code=True,
     # punc_model=punc_model,
     # spk_model=spk_model,
+    # end
     disable_update=disable_update,
     device=device,
 )
@@ -336,6 +341,8 @@ def speaker_verify(audio: np.ndarray, audio1: np.ndarray, sv_thr: float) -> tupl
     """
     res_sv = sv_pipeline([audio, audio1], thr=sv_thr)
     # res_sv = sv_pipeline([audio, audio1])
+    # 如果有先验信息，输入实际的说话人数，会得到更准确的预测结果
+    # result = sv_pipeline(input_wav, oracle_num=2)
     logger.info(
         f"[speaker_verify] audio_len: {len(audio)};audio1_len: {len(audio1)}; sv_thr: {sv_thr}; result:{res_sv}")
     return res_sv["score"] >= sv_thr

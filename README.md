@@ -16,6 +16,10 @@ funasr 1.2.6
 ```
 ## 安装运行：
 ```shell
+# https://download.pytorch.org/whl/torch/ 这里下载对应版本的2.6.0的torch 
+# 比如 2.6.0+cu124(gpu) 或者 2.6.0+cpu(cpu) 
+# 然后使用 pip install 文件地址 安装
+# 在运行下面的命令安装其他依赖
 pip install -r requirements.txt
 # 第一次运行会下载模型
 python meeting_demo.py 
